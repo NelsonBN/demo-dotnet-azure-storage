@@ -1,0 +1,55 @@
+version: '3.9'
+
+
+networks:
+  demo:
+    driver: bridge
+
+
+
+services:
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: azurite
+    restart: always
+    ports:
+      - 10000:10000 # blob
+      - 10001:10001 # queue
+      - 10002:10002 # table
+    healthcheck:
+      test: nc 127.0.0.1 10000 -z
+      interval: 3s
+      retries: 30
+    networks:
+      - demo
+
+  azure-cli:
+    image: mcr.microsoft.com/azure-cli
+    container_name: azure-cli
+    networks:
+      - demo
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        az storage container create --name demo-image-container --public-access blob --connection-string "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1"
+        az storage queue create --name demo-image-queue --connection-string "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;QueueEndpoint=http://azurite:10001/devstoreaccount1"
+        az storage table create --name DemoImageTable --connection-string "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://azurite:10002/devstoreaccount1"
+    depends_on:
+      - azurite
+
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: technobre/demo-api:latest
+    container_name: demo-api
+    ports:
+      - 8080:80
+    depends_on:
+      - azurite
+      - azure-cli
+    networks:
+      - demo
